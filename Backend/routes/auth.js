@@ -10,6 +10,11 @@ router.post('/register', async (req, res) => {
   const { name, email, password, dateOfBirth } = req.body;
 
   try {
+    // Validate input
+    if (!name || !email || !password || !dateOfBirth) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
@@ -35,7 +40,11 @@ router.post('/register', async (req, res) => {
       token,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Register error:', error.message);
+    if (error.name === 'MongooseServerSelectionError' || error.message.includes('buffering timed out')) {
+      return res.status(500).json({ message: 'Database connection error, please try again later' });
+    }
+    res.status(500).json({ message: 'Server error, please try again' });
   }
 });
 
@@ -44,6 +53,11 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
@@ -65,21 +79,33 @@ router.post('/login', async (req, res) => {
       token,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Login error:', error.message);
+    if (error.name === 'MongooseServerSelectionError' || error.message.includes('buffering timed out')) {
+      return res.status(500).json({ message: 'Database connection error, please try again later' });
+    }
+    res.status(500).json({ message: 'Server error, please try again' });
   }
 });
 
 // Get User Profile
 router.get('/me', protect, async (req, res) => {
-  const user = await User.findById(req.user.id);
-  res.json({
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    dateOfBirth: user.dateOfBirth,
-    interests: user.interests,
-    createdAt: user.createdAt,
-  });
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      dateOfBirth: user.dateOfBirth,
+      interests: user.interests,
+      createdAt: user.createdAt,
+    });
+  } catch (error) {
+    console.error('Profile error:', error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // Update User Interests (for EditProfile)
@@ -125,7 +151,7 @@ router.put('/update-interests', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating interests:', error.message);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
